@@ -357,8 +357,14 @@ export default function HistoryPanel({ history, onClearHistory, onDeleteItem, on
                                   <td style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                     <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: borderCol }} />
                                     <div>
-                                      <span style={{ fontWeight: '600', color: '#fff' }}>{item.name}</span>
-                                      <span style={{ fontSize: '9px', color: 'var(--text-muted)', marginLeft: '6px' }}>({item.charClass})</span>
+                                      <span style={{ fontWeight: '600', color: '#fff' }}>
+                                        {item.type === 'player' ? (item.playerName || item.name) : item.name}
+                                      </span>
+                                      {item.type === 'player' && (
+                                        <span style={{ fontSize: '9px', color: 'var(--text-muted)', marginLeft: '6px' }}>
+                                          ({item.charName || 'Character'} // {item.charClass})
+                                        </span>
+                                      )}
                                     </div>
                                   </td>
                                   <td style={{ padding: '12px 16px', textAlign: 'center', color: '#fff' }}>{tCount}</td>

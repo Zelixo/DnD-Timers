@@ -9,10 +9,10 @@ function App() {
   const [roster, setRoster] = useState(() => {
     const saved = localStorage.getItem('dnd_roster');
     return saved ? JSON.parse(saved) : [
-      { id: 'p1', name: 'Grog Strongjaw', charClass: 'Barbarian', color: '--neon-amber' },
-      { id: 'p2', name: 'Keyleth', charClass: 'Druid', color: '--neon-green' },
-      { id: 'p3', name: 'Scanlan Shorthalt', charClass: 'Bard', color: '--neon-purple' },
-      { id: 'p4', name: 'Percy de Rolo', charClass: 'Fighter', color: '--neon-cyan' }
+      { id: 'p1', playerName: 'Travis', charName: 'Grog Strongjaw', charClass: 'Barbarian', color: '--neon-amber' },
+      { id: 'p2', playerName: 'Marisha', charName: 'Keyleth', charClass: 'Druid', color: '--neon-green' },
+      { id: 'p3', playerName: 'Sam', charName: 'Scanlan Shorthalt', charClass: 'Bard', color: '--neon-purple' },
+      { id: 'p4', playerName: 'Taliesin', charName: 'Percy de Rolo', charClass: 'Fighter', color: '--neon-cyan' }
     ];
   });
 
@@ -60,7 +60,9 @@ function App() {
 
   // Input states for adding players
   const [playerNameInput, setPlayerNameInput] = useState('');
+  const [charNameInput, setCharNameInput] = useState('');
   const [charClassInput, setCharClassInput] = useState('Fighter');
+  const [customClassInput, setCustomClassInput] = useState('');
 
   // Save Modal state details
   const [showSaveModal, setShowSaveModal] = useState(false);
@@ -213,7 +215,9 @@ function App() {
       id: `queue-${Date.now()}-${Math.random()}`,
       type: 'player',
       rosterId: player.id,
-      name: player.name,
+      playerName: player.playerName || player.name || 'Player',
+      charName: player.charName || 'Character',
+      name: player.playerName || player.name || 'Player', // Stats belong to player name
       color: player.color,
       charClass: player.charClass,
       initiative: 0
@@ -390,21 +394,29 @@ function App() {
     e.preventDefault();
     if (!playerNameInput.trim()) return;
 
-    if (roster.some(p => p.name.toLowerCase() === playerNameInput.trim().toLowerCase())) {
-      alert('Character name already exists.');
+    // Check if player name already exists in roster (playerName or name)
+    if (roster.some(p => (p.playerName || p.name || '').toLowerCase() === playerNameInput.trim().toLowerCase())) {
+      alert('A player with this name already exists in the roster.');
       return;
     }
 
     const neonColors = ['--neon-cyan', '--neon-purple', '--neon-pink', '--neon-green', '--neon-amber'];
+    const finalClass = charClassInput === 'Other' ? (customClassInput.trim() || 'Other') : charClassInput;
+    
     const newPlayer = {
       id: `player-${Date.now()}`,
-      name: playerNameInput.trim(),
-      charClass: charClassInput,
+      playerName: playerNameInput.trim(),
+      charName: charNameInput.trim() || 'Unnamed Character',
+      name: playerNameInput.trim(), // for backwards compatibility
+      charClass: finalClass,
       color: neonColors[Math.floor(Math.random() * neonColors.length)]
     };
 
     setRoster(prev => [...prev, newPlayer]);
     setPlayerNameInput('');
+    setCharNameInput('');
+    setCustomClassInput('');
+    setCharClassInput('Fighter');
   };
 
   const handleRemoveRosterPlayer = (id) => {
@@ -608,8 +620,12 @@ function App() {
                       title="Add to active combat queue"
                     >
                       <div style={{ pointerEvents: 'none' }}>
-                        <div style={{ fontSize: '13px', fontWeight: '600', color: '#fff' }}>{p.name}</div>
-                        <div style={{ fontSize: '9px', color: 'var(--text-secondary)' }}>{p.charClass}</div>
+                        <div style={{ fontSize: '13px', fontWeight: '600', color: '#fff' }}>
+                          {p.playerName || p.name}
+                        </div>
+                        <div style={{ fontSize: '9px', color: 'var(--text-secondary)' }}>
+                          {p.charName ? `${p.charName} // ` : ''}{p.charClass}
+                        </div>
                       </div>
                       <button 
                         onClick={(e) => {
@@ -639,23 +655,43 @@ function App() {
                 <input 
                   type="text"
                   className="input-neon"
-                  placeholder="Character Name..."
+                  placeholder="Player Name (e.g. Laura)..."
                   value={playerNameInput}
                   onChange={(e) => setPlayerNameInput(e.target.value)}
-                  style={{ height: '32px', padding: '6px 10px', fontSize: '13px' }}
+                  style={{ height: '30px', padding: '4px 8px', fontSize: '12px' }}
+                  maxLength={20}
+                />
+                <input 
+                  type="text"
+                  className="input-neon"
+                  placeholder="Character Name (e.g. Vex)..."
+                  value={charNameInput}
+                  onChange={(e) => setCharNameInput(e.target.value)}
+                  style={{ height: '30px', padding: '4px 8px', fontSize: '12px' }}
                   maxLength={20}
                 />
                 <select 
                   className="input-neon"
                   value={charClassInput}
                   onChange={(e) => setCharClassInput(e.target.value)}
-                  style={{ height: '32px', padding: '0 8px', fontSize: '13px', appearance: 'none', cursor: 'pointer' }}
+                  style={{ height: '30px', padding: '0 8px', fontSize: '12px', appearance: 'none', cursor: 'pointer' }}
                 >
                   {classes.map(c => (
                     <option key={c} value={c} style={{ background: '#131722', color: '#fff' }}>{c}</option>
                   ))}
                 </select>
-                <button type="submit" className="btn-neon btn-cyan" style={{ height: '32px', fontSize: '12px', padding: '0' }}>
+                {charClassInput === 'Other' && (
+                  <input 
+                    type="text"
+                    className="input-neon"
+                    placeholder="Custom Class Name..."
+                    value={customClassInput}
+                    onChange={(e) => setCustomClassInput(e.target.value)}
+                    style={{ height: '30px', padding: '4px 8px', fontSize: '12px', borderColor: 'var(--neon-purple)' }}
+                    maxLength={20}
+                  />
+                )}
+                <button type="submit" className="btn-neon btn-cyan" style={{ height: '30px', fontSize: '11px', padding: '0' }}>
                   Create & Add
                 </button>
               </form>
@@ -765,7 +801,9 @@ function App() {
                     </span>
 
                     <h2 style={{ fontSize: '42px', marginTop: '16px', marginBottom: '2px', wordBreak: 'break-word', color: '#fff', fontWeight: '800' }}>
-                      {activeParticipant.name}
+                      {activeParticipant.type === 'player' 
+                        ? `${activeParticipant.playerName || activeParticipant.name} (${activeParticipant.charName || 'Character'})` 
+                        : activeParticipant.name}
                     </h2>
 
                     <div style={{ 
@@ -910,10 +948,12 @@ function App() {
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <span style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 'bold' }}>#{idx + 1}</span>
                             <span style={{ fontWeight: isActive ? '800' : '600', color: isActive ? '#fff' : 'var(--text-primary)', fontSize: '13px' }}>
-                              {item.name}
+                              {item.type === 'player' ? (item.playerName || item.name) : item.name}
                             </span>
                             {item.type === 'player' && (
-                              <span style={{ fontSize: '9px', color: 'var(--text-muted)' }}>({item.charClass})</span>
+                              <span style={{ fontSize: '9px', color: 'var(--text-muted)' }}>
+                                ({item.charName || 'Character'} // {item.charClass})
+                              </span>
                             )}
                           </div>
 
