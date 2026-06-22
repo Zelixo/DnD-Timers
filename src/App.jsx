@@ -1,5 +1,63 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import HistoryPanel from './components/HistoryPanel';
+
+const generateUniqueId = (prefix) => {
+  return `${prefix}-${Date.now()}-${Math.random()}`;
+};
+
+const getRandomNeonColor = (colors) => {
+  return colors[Math.floor(Math.random() * colors.length)];
+};
+
+const rollSingleDie = (sides) => {
+  return Math.floor(Math.random() * sides) + 1;
+};
+
+const playDiceSound = (volume) => {
+  try {
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const now = audioCtx.currentTime;
+    
+    // We will play 4 quick rattle sounds and 1 landing sound
+    const rattleCount = 4;
+    for (let i = 0; i < rattleCount; i++) {
+      const osc = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+      osc.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      
+      // Randomize pitch a bit for organic wood/plastic rattle sound
+      const pitch = 150 + Math.random() * 100; 
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(pitch, now + i * 0.07);
+      
+      // Volume decay for each bounce
+      const clickVolume = (volume * 0.6) * (1 - i / (rattleCount + 1));
+      gainNode.gain.setValueAtTime(clickVolume, now + i * 0.07);
+      gainNode.gain.exponentialRampToValueAtTime(0.001, now + i * 0.07 + 0.05);
+      
+      osc.start(now + i * 0.07);
+      osc.stop(now + i * 0.07 + 0.05);
+    }
+    
+    // Final landing sound
+    const finalOsc = audioCtx.createOscillator();
+    const finalGain = audioCtx.createGain();
+    finalOsc.connect(finalGain);
+    finalGain.connect(audioCtx.destination);
+    
+    finalOsc.type = 'sine';
+    finalOsc.frequency.setValueAtTime(110, now + rattleCount * 0.07);
+    
+    finalGain.gain.setValueAtTime(volume * 0.8, now + rattleCount * 0.07);
+    finalGain.gain.exponentialRampToValueAtTime(0.001, now + rattleCount * 0.07 + 0.12);
+    
+    finalOsc.start(now + rattleCount * 0.07);
+    finalOsc.stop(now + rattleCount * 0.07 + 0.12);
+  } catch {
+    void 0;
+  }
+};
 
 function App() {
   // Navigation: 'dashboard' or 'history'
@@ -31,7 +89,10 @@ function App() {
   // Active Combat State (saved to local storage to persist on refresh)
   const [activeIndex, setActiveIndex] = useState(() => {
     const saved = localStorage.getItem('dnd_active_index');
-    return saved ? parseInt(saved, 10) : 0;
+    const queueStr = localStorage.getItem('dnd_combat_queue');
+    const queue = queueStr ? JSON.parse(queueStr) : [];
+    const idx = saved ? parseInt(saved, 10) : 0;
+    return queue.length > 0 && idx >= queue.length ? 0 : idx;
   });
   const [round, setRound] = useState(() => {
     const saved = localStorage.getItem('dnd_round');
@@ -64,10 +125,34 @@ function App() {
   const [charClassInput, setCharClassInput] = useState('Fighter');
   const [customClassInput, setCustomClassInput] = useState('');
 
+  // Edit Roster Player state
+  const [editingPlayerId, setEditingPlayerId] = useState(null);
+  const [editCharName, setEditCharName] = useState('');
+  const [editCharClass, setEditCharClass] = useState('Fighter');
+
   // Save Modal state details
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [saveSessionName, setSaveSessionName] = useState('');
   const [saveSessionType, setSaveSessionType] = useState('Combat');
+
+  // Dice Roller state
+  const [showDiceDrawer, setShowDiceDrawer] = useState(false);
+  const [diceModifier, setDiceModifier] = useState(0);
+  const [diceHistory, setDiceHistory] = useState(() => {
+    const saved = localStorage.getItem('dnd_dice_history');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  // Settings state
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [volume, setVolume] = useState(() => {
+    const saved = localStorage.getItem('dnd_volume');
+    return saved !== null ? parseFloat(saved) : 0.04;
+  });
+  const [beepEnabled, setBeepEnabled] = useState(() => {
+    const saved = localStorage.getItem('dnd_beep_enabled');
+    return saved !== null ? JSON.parse(saved) : true;
+  });
 
   const classes = [
     'Barbarian', 'Bard', 'Cleric', 'Druid', 'Fighter', 
@@ -84,15 +169,21 @@ function App() {
 
   useEffect(() => {
     localStorage.setItem('dnd_combat_queue', JSON.stringify(combatQueue));
-    // Reset active index if queue shrinks under active index
-    if (combatQueue.length > 0 && activeIndex >= combatQueue.length) {
-      setActiveIndex(0);
-    }
   }, [combatQueue]);
 
   useEffect(() => {
     localStorage.setItem('dnd_combat_history', JSON.stringify(combatHistory));
   }, [combatHistory]);
+
+  useEffect(() => {
+    localStorage.setItem('dnd_dice_history', JSON.stringify(diceHistory));
+  }, [diceHistory]);
+
+  // Sync settings state to local storage
+  useEffect(() => {
+    localStorage.setItem('dnd_volume', volume.toString());
+    localStorage.setItem('dnd_beep_enabled', JSON.stringify(beepEnabled));
+  }, [volume, beepEnabled]);
 
   // Sync active session details
   useEffect(() => {
@@ -118,8 +209,11 @@ function App() {
     return () => clearInterval(intervalRef.current);
   }, [isPaused, combatQueue.length]);
 
+
+
   // Play audio beep
   const playBeep = () => {
+    if (!beepEnabled) return;
     try {
       const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       const oscillator = audioCtx.createOscillator();
@@ -128,12 +222,49 @@ function App() {
       gainNode.connect(audioCtx.destination);
       oscillator.type = 'sine';
       oscillator.frequency.setValueAtTime(750, audioCtx.currentTime); 
-      gainNode.gain.setValueAtTime(0.04, audioCtx.currentTime);
+      gainNode.gain.setValueAtTime(volume, audioCtx.currentTime);
       oscillator.start();
-      oscillator.stop(audioCtx.currentTime + 0.08);
-    } catch (e) {
-      // Audio blocked or not supported
+    } catch {
+      void 0;
     }
+  };
+
+  const handleRollDice = (sides, count = 1) => {
+    playDiceSound(volume);
+    const rolls = [];
+    for (let i = 0; i < count; i++) {
+      rolls.push(rollSingleDie(sides));
+    }
+    const sum = rolls.reduce((a, b) => a + b, 0);
+    const total = sum + diceModifier;
+    
+    // Choose custom neon colors for different dice
+    let diceColor = '--neon-cyan';
+    if (sides === 20) diceColor = '--neon-purple';
+    else if (sides === 6) diceColor = '--neon-green';
+    else if (sides === 10 || sides === 100) diceColor = '--neon-pink';
+    else if (sides === 8 || sides === 12) diceColor = '--neon-amber';
+
+    const formulaStr = count > 1 
+      ? `(${rolls.join(', ')})`
+      : `(${rolls[0]})`;
+
+    const modifierStr = diceModifier > 0 
+      ? ` + ${diceModifier}` 
+      : diceModifier < 0 
+        ? ` - ${Math.abs(diceModifier)}` 
+        : '';
+
+    const newRoll = {
+      id: generateUniqueId('roll'),
+      timestamp: new Date().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      text: `Rolled ${count}d${sides}${modifierStr}`,
+      formula: `${formulaStr}${modifierStr}`,
+      result: total,
+      color: diceColor
+    };
+
+    setDiceHistory(prev => [newRoll, ...prev].slice(0, 50)); // Keep last 50 rolls
   };
 
   const formatTime = (secs) => {
@@ -165,7 +296,7 @@ function App() {
     
     // Log the turn duration
     const newRecord = {
-      id: `record-${Date.now()}-${Math.random()}`,
+      id: generateUniqueId('record'),
       type: activeItem.type,
       name: activeItem.name,
       rosterId: activeItem.rosterId,
@@ -212,7 +343,7 @@ function App() {
   const handleAddPlayerToQueue = (player) => {
     captureSnapshot();
     const newItem = {
-      id: `queue-${Date.now()}-${Math.random()}`,
+      id: generateUniqueId('queue'),
       type: 'player',
       rosterId: player.id,
       playerName: player.playerName || player.name || 'Player',
@@ -231,7 +362,7 @@ function App() {
     const newCount = dmSlots.length + 1;
     
     const newItem = {
-      id: `queue-${Date.now()}-${Math.random()}`,
+      id: generateUniqueId('queue'),
       type: 'dm',
       name: `DM Time (${newCount})`,
       color: '--neon-pink',
@@ -354,7 +485,7 @@ function App() {
     if (turnTime > 0 && combatQueue.length > 0) {
       const activeItem = combatQueue[activeIndex];
       finalRecords.push({
-        id: `record-final-${Date.now()}`,
+        id: generateUniqueId('record-final'),
         type: activeItem.type,
         name: activeItem.name,
         rosterId: activeItem.rosterId,
@@ -364,7 +495,7 @@ function App() {
     }
 
     const logEntry = {
-      id: `combat-${Date.now()}`,
+      id: generateUniqueId('combat'),
       timestamp: new Date().toISOString(),
       sessionName: saveSessionName.trim() || `Session - ${new Date().toLocaleDateString()}`,
       sessionType: saveSessionType,
@@ -404,12 +535,12 @@ function App() {
     const finalClass = charClassInput === 'Other' ? (customClassInput.trim() || 'Other') : charClassInput;
     
     const newPlayer = {
-      id: `player-${Date.now()}`,
+      id: generateUniqueId('player'),
       playerName: playerNameInput.trim(),
       charName: charNameInput.trim() || 'Unnamed Character',
       name: playerNameInput.trim(), // for backwards compatibility
       charClass: finalClass,
-      color: neonColors[Math.floor(Math.random() * neonColors.length)]
+      color: getRandomNeonColor(neonColors)
     };
 
     setRoster(prev => [...prev, newPlayer]);
@@ -421,6 +552,17 @@ function App() {
 
   const handleRemoveRosterPlayer = (id) => {
     setRoster(prev => prev.filter(p => p.id !== id));
+  };
+
+  const handleSavePlayerEdit = (id) => {
+    const finalCharName = editCharName.trim() || 'Unnamed Character';
+    setRoster(prev => prev.map(p => 
+      p.id === id ? { ...p, charName: finalCharName, charClass: editCharClass } : p
+    ));
+    setCombatQueue(prev => prev.map(item => 
+      item.rosterId === id ? { ...item, charName: finalCharName, charClass: editCharClass } : item
+    ));
+    setEditingPlayerId(null);
   };
 
   // Live Pacing awards math calculator
@@ -487,6 +629,34 @@ function App() {
       timeSinker: slowestSingle.name !== null ? slowestSingle.name : null
     };
   };
+
+  // Keyboard Shortcuts Hook
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Disable shortcuts if focus is in an input, textarea or select
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) {
+        return;
+      }
+
+      if (e.key === ' ' || e.code === 'Space') {
+        e.preventDefault();
+        handlePauseToggle();
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        handleEndTurn();
+      } else if ((e.key === 'z' || e.key === 'Z') && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        handleUndo();
+      } else if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        handleResetSession(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPaused, combatQueue, activeIndex, round, turnTime, totalTime, turnRecords, historyStack]);
 
   const awards = getLiveAwards();
 
@@ -573,6 +743,18 @@ function App() {
           >
             📖 Saved Logs ({combatHistory.length})
           </button>
+          <button 
+            className="btn-secondary"
+            onClick={() => setShowSettingsModal(true)}
+            style={{ 
+              borderColor: 'var(--border-color)',
+              color: 'var(--text-secondary)',
+              padding: '10px 14px'
+            }}
+            title="Open Settings"
+          >
+            ⚙️ Settings
+          </button>
         </nav>
       </header>
 
@@ -587,7 +769,7 @@ function App() {
           />
         ) : (
           /* UNIFIED LIVE DASHBOARD (Three Columns) */
-          <div style={{ display: 'grid', gridTemplateColumns: '270px 1fr 340px', gap: '20px', alignItems: 'stretch' }}>
+          <div className="dashboard-layout">
             
             {/* COLUMN 1: Roster & Quick Add (Left) */}
             <div className="glass-panel" style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left', background: 'rgba(15, 18, 25, 0.5)' }}>
@@ -603,49 +785,152 @@ function App() {
                 {roster.length === 0 ? (
                   <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic' }}>Roster is empty.</span>
                 ) : (
-                  roster.map(p => (
-                    <div 
-                      key={p.id}
-                      onClick={() => handleAddPlayerToQueue(p)}
-                      className="glass-panel glass-panel-interactive"
-                      style={{ 
-                        padding: '10px 12px', 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'space-between',
-                        cursor: 'pointer',
-                        borderLeft: `3px solid var(${p.color})`,
-                        background: 'rgba(255,255,255,0.015)'
-                      }}
-                      title="Add to active combat queue"
-                    >
-                      <div style={{ pointerEvents: 'none' }}>
-                        <div style={{ fontSize: '13px', fontWeight: '600', color: '#fff' }}>
-                          {p.playerName || p.name}
+                  roster.map(p => {
+                    const isEditing = editingPlayerId === p.id;
+                    if (isEditing) {
+                      return (
+                        <div 
+                          key={p.id}
+                          className="glass-panel"
+                          style={{ 
+                            padding: '10px 12px', 
+                            display: 'flex', 
+                            flexDirection: 'column',
+                            gap: '8px',
+                            borderLeft: `3px solid var(${p.color})`,
+                            background: 'rgba(255,255,255,0.03)'
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <div style={{ fontSize: '12px', fontWeight: '700', color: '#fff', textAlign: 'left' }}>
+                            {p.playerName || p.name} <span style={{ fontSize: '9px', color: 'var(--text-muted)' }}>(Editing)</span>
+                          </div>
+                          
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', textAlign: 'left' }}>
+                            <label style={{ fontSize: '9px', color: 'var(--text-muted)' }}>Character Name</label>
+                            <input 
+                              type="text"
+                              className="input-neon"
+                              value={editCharName}
+                              onChange={(e) => setEditCharName(e.target.value)}
+                              style={{ height: '28px', padding: '2px 8px', fontSize: '11px' }}
+                              maxLength={20}
+                              placeholder="Character Name..."
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          </div>
+
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', textAlign: 'left' }}>
+                            <label style={{ fontSize: '9px', color: 'var(--text-muted)' }}>Class</label>
+                            <select 
+                              className="input-neon"
+                              value={editCharClass}
+                              onChange={(e) => setEditCharClass(e.target.value)}
+                              style={{ height: '28px', padding: '0 8px', fontSize: '11px', appearance: 'none', cursor: 'pointer' }}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {classes.map(c => (
+                                <option key={c} value={c} style={{ background: '#131722', color: '#fff' }}>{c}</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div style={{ display: 'flex', gap: '6px', marginTop: '2px' }}>
+                            <button 
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleSavePlayerEdit(p.id);
+                              }}
+                              className="btn-neon btn-cyan"
+                              style={{ flex: 1, height: '26px', fontSize: '10px', padding: 0 }}
+                            >
+                              ✔️ Save
+                            </button>
+                            <button 
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingPlayerId(null);
+                              }}
+                              className="btn-secondary"
+                              style={{ flex: 1, height: '26px', fontSize: '10px', padding: 0, justifyContent: 'center' }}
+                            >
+                              ✕ Cancel
+                            </button>
+                          </div>
                         </div>
-                        <div style={{ fontSize: '9px', color: 'var(--text-secondary)' }}>
-                          {p.charName ? `${p.charName} // ` : ''}{p.charClass}
+                      );
+                    }
+
+                    return (
+                      <div 
+                        key={p.id}
+                        onClick={() => handleAddPlayerToQueue(p)}
+                        className="glass-panel glass-panel-interactive"
+                        style={{ 
+                          padding: '10px 12px', 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          justifyContent: 'space-between',
+                          cursor: 'pointer',
+                          borderLeft: `3px solid var(${p.color})`,
+                          background: 'rgba(255,255,255,0.015)'
+                        }}
+                        title="Add to active combat queue"
+                      >
+                        <div style={{ pointerEvents: 'none' }}>
+                          <div style={{ fontSize: '13px', fontWeight: '600', color: '#fff' }}>
+                            {p.playerName || p.name}
+                          </div>
+                          <div style={{ fontSize: '9px', color: 'var(--text-secondary)' }}>
+                            {p.charName ? `${p.charName} // ` : ''}{p.charClass}
+                          </div>
+                        </div>
+                        
+                        <div style={{ display: 'flex', gap: '2px' }}>
+                          <button 
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingPlayerId(p.id);
+                              setEditCharName(p.charName || '');
+                              setEditCharClass(p.charClass || 'Fighter');
+                            }}
+                            style={{ 
+                              background: 'transparent', 
+                              border: 'none', 
+                              color: 'var(--text-muted)', 
+                              cursor: 'pointer',
+                              fontSize: '11px',
+                              padding: '4px'
+                            }}
+                            title="Edit character info"
+                          >
+                            ✏️
+                          </button>
+                          <button 
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRemoveRosterPlayer(p.id);
+                            }}
+                            style={{ 
+                              background: 'transparent', 
+                              border: 'none', 
+                              color: 'var(--text-muted)', 
+                              cursor: 'pointer',
+                              fontSize: '11px',
+                              padding: '4px'
+                            }}
+                            title="Remove player from roster"
+                          >
+                            ✕
+                          </button>
                         </div>
                       </div>
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleRemoveRosterPlayer(p.id);
-                        }}
-                        style={{ 
-                          background: 'transparent', 
-                          border: 'none', 
-                          color: 'var(--text-muted)', 
-                          cursor: 'pointer',
-                          fontSize: '12px',
-                          padding: '4px'
-                        }}
-                        title="Remove player from roster"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
 
@@ -805,6 +1090,31 @@ function App() {
                         ? `${activeParticipant.playerName || activeParticipant.name} (${activeParticipant.charName || 'Character'})` 
                         : activeParticipant.name}
                     </h2>
+
+                    {onDeckParticipant && combatQueue.length > 1 && (
+                      <div style={{ 
+                        fontSize: '12px', 
+                        color: 'var(--text-secondary)', 
+                        marginTop: '4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        background: 'rgba(255, 255, 255, 0.02)',
+                        padding: '4px 12px',
+                        borderRadius: '6px',
+                        border: '1px solid rgba(255, 255, 255, 0.04)'
+                      }}>
+                        <span>Next Up:</span>
+                        <strong style={{ 
+                          color: onDeckParticipant.type === 'dm' ? 'var(--neon-pink)' : `var(${onDeckParticipant.color})`,
+                          textShadow: onDeckParticipant.type === 'dm' ? '0 0 8px rgba(255, 0, 122, 0.2)' : `0 0 8px var(${onDeckParticipant.color})`
+                        }}>
+                          {onDeckParticipant.type === 'player' 
+                            ? `${onDeckParticipant.playerName || onDeckParticipant.name} (${onDeckParticipant.charName || 'Character'})` 
+                            : onDeckParticipant.name}
+                        </strong>
+                      </div>
+                    )}
 
                     <div style={{ 
                       fontFamily: 'var(--font-mono)', 
@@ -1121,6 +1431,350 @@ function App() {
           </div>
         </div>
       )}
+
+      {/* Settings Modal overlay */}
+      {showSettingsModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          background: 'rgba(0,0,0,0.6)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div className="glass-panel" style={{ padding: '24px', width: '420px', display: 'flex', flexDirection: 'column', gap: '16px', background: '#1c222e', border: '1px solid var(--neon-cyan)', boxShadow: 'var(--shadow-cyan-glow)' }}>
+            <h3 style={{ fontSize: '18px', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              ⚙️ Pacing Timer Settings
+            </h3>
+            
+            {/* Audio Settings */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', borderBottom: '1px solid var(--border-color)', paddingBottom: '16px', textAlign: 'left' }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 'bold', textTransform: 'uppercase' }}>Audio Feedback</span>
+              
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <label style={{ fontSize: '13px', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <input 
+                    type="checkbox" 
+                    checked={beepEnabled} 
+                    onChange={(e) => setBeepEnabled(e.target.checked)} 
+                    style={{ accentColor: 'var(--neon-cyan)', cursor: 'pointer' }}
+                  />
+                  Enable Beep on End Turn
+                </label>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>Beep Volume</span>
+                  <span style={{ color: 'var(--neon-cyan)', fontFamily: 'var(--font-mono)' }}>{Math.round(volume * 500)}%</span>
+                </div>
+                <input 
+                  type="range" 
+                  min="0" 
+                  max="0.2" 
+                  step="0.01" 
+                  value={volume} 
+                  onChange={(e) => {
+                    const newVol = parseFloat(e.target.value);
+                    setVolume(newVol);
+                    // Play a quick test beep so the user knows what it sounds like
+                    if (beepEnabled && newVol > 0) {
+                      try {
+                        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                        const oscillator = audioCtx.createOscillator();
+                        const gainNode = audioCtx.createGain();
+                        oscillator.connect(gainNode);
+                        gainNode.connect(audioCtx.destination);
+                        oscillator.type = 'sine';
+                        oscillator.frequency.setValueAtTime(750, audioCtx.currentTime); 
+                        gainNode.gain.setValueAtTime(newVol, audioCtx.currentTime);
+                        oscillator.start();
+                      } catch {
+                        void 0;
+                      }
+                    }
+                  }}
+                  style={{ width: '100%', accentColor: 'var(--neon-cyan)', cursor: 'pointer' }}
+                  disabled={!beepEnabled}
+                />
+              </div>
+            </div>
+
+            {/* Keyboard Shortcuts Cheat Sheet */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', textAlign: 'left' }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 'bold', textTransform: 'uppercase' }}>⌨️ Keyboard Shortcuts</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', background: 'rgba(0,0,0,0.2)', padding: '10px', borderRadius: '8px', fontSize: '12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>Pause / Resume Timer</span>
+                  <kbd style={{ background: '#2e3748', padding: '2px 6px', borderRadius: '4px', color: '#fff', fontFamily: 'var(--font-mono)' }}>Space</kbd>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>End Turn (Advance Queue)</span>
+                  <kbd style={{ background: '#2e3748', padding: '2px 6px', borderRadius: '4px', color: '#fff', fontFamily: 'var(--font-mono)' }}>Enter</kbd>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>Undo Last Action</span>
+                  <kbd style={{ background: '#2e3748', padding: '2px 6px', borderRadius: '4px', color: '#fff', fontFamily: 'var(--font-mono)' }}>Ctrl + Z</kbd>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>Reset Turn Clock</span>
+                  <kbd style={{ background: '#2e3748', padding: '2px 6px', borderRadius: '4px', color: '#fff', fontFamily: 'var(--font-mono)' }}>R</kbd>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+              <button 
+                onClick={() => setShowSettingsModal(false)} 
+                className="btn-neon btn-cyan"
+                style={{ flex: 1 }}
+              >
+                Close Settings
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Dice Roller Button */}
+      <button
+        onClick={() => setShowDiceDrawer(!showDiceDrawer)}
+        style={{
+          position: 'fixed',
+          bottom: '24px',
+          right: '24px',
+          width: '56px',
+          height: '56px',
+          borderRadius: '50%',
+          background: 'linear-gradient(135deg, var(--neon-purple), var(--neon-cyan))',
+          border: 'none',
+          color: '#000',
+          fontSize: '24px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          boxShadow: '0 0 15px rgba(189, 0, 255, 0.4)',
+          zIndex: 1000,
+          transition: 'transform 0.2s, box-shadow 0.2s'
+        }}
+        className="floating-dice-btn"
+        title="Open Dice Roller"
+      >
+        🎲
+      </button>
+
+      {/* Dice Drawer Backdrop */}
+      {showDiceDrawer && (
+        <div 
+          onClick={() => setShowDiceDrawer(false)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            background: 'rgba(0,0,0,0.3)',
+            backdropFilter: 'blur(2px)',
+            zIndex: 1000
+          }}
+        />
+      )}
+
+      {/* Sliding Dice Drawer */}
+      <aside className={`dice-drawer ${showDiceDrawer ? 'open' : ''}`}>
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%', gap: '16px' }}>
+          
+          {/* Header */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '12px' }}>
+            <h3 style={{ fontSize: '16px', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+              🎲 Dice Roller
+            </h3>
+            <button 
+              onClick={() => setShowDiceDrawer(false)}
+              style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '18px' }}
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* Modifier Input */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', textAlign: 'left' }}>
+            <label style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 'bold', textTransform: 'uppercase' }}>
+              Roll Modifier
+            </label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <button 
+                type="button"
+                onClick={() => setDiceModifier(prev => prev - 1)} 
+                className="btn-secondary" 
+                style={{ padding: '6px 12px', fontSize: '14px', fontWeight: 'bold' }}
+              >
+                -
+              </button>
+              <input 
+                type="number" 
+                className="input-neon"
+                value={diceModifier}
+                onChange={(e) => setDiceModifier(parseInt(e.target.value, 10) || 0)}
+                style={{ textAlign: 'center', height: '34px', padding: '0 8px', fontSize: '14px', fontWeight: 'bold' }}
+              />
+              <button 
+                type="button"
+                onClick={() => setDiceModifier(prev => prev + 1)} 
+                className="btn-secondary" 
+                style={{ padding: '6px 12px', fontSize: '14px', fontWeight: 'bold' }}
+              >
+                +
+              </button>
+              <button 
+                type="button"
+                onClick={() => setDiceModifier(0)} 
+                className="btn-secondary" 
+                style={{ padding: '6px 10px', fontSize: '11px' }}
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+
+          {/* Dice Grid */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', textAlign: 'left' }}>
+            <label style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 'bold', textTransform: 'uppercase' }}>
+              Select Die to Roll
+            </label>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
+              {[4, 6, 8, 10, 12, 20, 100].map(sides => {
+                let borderCol = 'var(--neon-cyan)';
+                if (sides === 20) borderCol = 'var(--neon-purple)';
+                else if (sides === 6) borderCol = 'var(--neon-green)';
+                else if (sides === 10 || sides === 100) borderCol = 'var(--neon-pink)';
+                else if (sides === 8 || sides === 12) borderCol = 'var(--neon-amber)';
+
+                return (
+                  <button
+                    key={sides}
+                    type="button"
+                    onClick={() => handleRollDice(sides, 1)}
+                    className="btn-secondary dice-grid-btn"
+                    style={{ 
+                      borderColor: borderCol, 
+                      color: '#fff', 
+                      height: '54px', 
+                      display: 'flex', 
+                      flexDirection: 'column', 
+                      justifyContent: 'center', 
+                      alignItems: 'center',
+                      gap: '2px',
+                      padding: 0,
+                      background: 'rgba(255,255,255,0.01)'
+                    }}
+                  >
+                    <span style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>d{sides}</span>
+                    <span style={{ fontSize: '12px', fontWeight: 'bold', color: borderCol }}>Roll</span>
+                  </button>
+                );
+              })}
+              
+              {/* Multi Roll Helper (Quick 2d6) */}
+              <button
+                type="button"
+                onClick={() => handleRollDice(6, 2)}
+                className="btn-secondary dice-grid-btn"
+                style={{ 
+                  borderColor: 'var(--neon-green)', 
+                  color: '#fff', 
+                  height: '54px', 
+                  display: 'flex', 
+                  flexDirection: 'column', 
+                  justifyContent: 'center', 
+                  alignItems: 'center',
+                  gap: '2px',
+                  padding: 0,
+                  background: 'rgba(255,255,255,0.01)'
+                }}
+              >
+                <span style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>2d6</span>
+                <span style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--neon-green)' }}>Roll</span>
+              </button>
+            </div>
+          </div>
+
+          {/* History Feed */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px', textAlign: 'left', minHeight: 0 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <label style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 'bold', textTransform: 'uppercase' }}>
+                Roll History
+              </label>
+              {diceHistory.length > 0 && (
+                <button 
+                  type="button"
+                  onClick={() => setDiceHistory([])}
+                  style={{ background: 'none', border: 'none', color: 'var(--neon-pink)', cursor: 'pointer', fontSize: '10px', fontWeight: 'bold' }}
+                >
+                  Clear Feed
+                </button>
+              )}
+            </div>
+            
+            <div 
+              style={{ 
+                flex: 1, 
+                overflowY: 'auto', 
+                background: 'rgba(0,0,0,0.2)', 
+                borderRadius: '8px', 
+                padding: '8px',
+                border: '1px solid var(--border-color)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
+                minHeight: 0
+              }}
+            >
+              {diceHistory.length === 0 ? (
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic', margin: 'auto', textAlign: 'center' }}>
+                  No rolls logged yet.
+                </span>
+              ) : (
+                diceHistory.map(roll => (
+                  <div 
+                    key={roll.id} 
+                    style={{ 
+                      padding: '8px 10px', 
+                      borderRadius: '6px', 
+                      background: 'rgba(255,255,255,0.01)', 
+                      borderLeft: `3px solid var(${roll.color})`,
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      fontSize: '12px'
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontWeight: '500', color: 'var(--text-secondary)' }}>{roll.text}</div>
+                      <div style={{ fontSize: '10px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginTop: '2px' }}>
+                        {roll.formula}
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '16px', fontWeight: '800', color: `var(${roll.color})`, textShadow: `0 0 8px var(${roll.color})` }}>
+                        {roll.result}
+                      </div>
+                      <span style={{ fontSize: '8px', color: 'var(--text-muted)' }}>{roll.timestamp}</span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+        </div>
+      </aside>
 
     </div>
   );

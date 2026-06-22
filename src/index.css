@@ -312,3 +312,57 @@ h1, h2, h3, h4, h5, h6 {
   background: var(--neon-pink);
   box-shadow: 0 0 8px var(--neon-pink);
 }
+
+/* Dashboard Responsive Layout Styles */
+.dashboard-layout {
+  display: grid;
+  grid-template-columns: 270px 1fr 340px;
+  gap: 20px;
+  align-items: stretch;
+}
+
+@media (max-width: 1024px) {
+  .dashboard-layout {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+}
+
+/* Dice Roller Sidebar Drawer Styles */
+.dice-drawer {
+  position: fixed;
+  top: 0;
+  right: -360px;
+  width: 350px;
+  height: 100%;
+  background: #131722;
+  border-left: 1px solid var(--border-color);
+  box-shadow: -8px 0 32px rgba(0, 0, 0, 0.6);
+  z-index: 1001;
+  padding: 24px;
+  transition: right 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+}
+
+.dice-drawer.open {
+  right: 0;
+}
+
+.dice-grid-btn {
+  transition: transform 0.15s ease, box-shadow 0.15s ease !important;
+}
+
+.dice-grid-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.05);
+}
+
+.floating-dice-btn:hover {
+  transform: scale(1.1) rotate(15deg);
+  box-shadow: 0 0 25px rgba(189, 0, 255, 0.6);
+}
+
+.floating-dice-btn:active {
+  transform: scale(0.95);
+}
