@@ -1,0 +1,314 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Space+Mono:wght@400;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
+
+:root {
+  /* Color Palette - Deep Dark space background with vivid neon accents */
+  --bg-main: #0a0b0e;
+  --bg-surface: rgba(20, 24, 33, 0.7);
+  --bg-card: rgba(28, 34, 46, 0.85);
+  
+  --border-color: rgba(255, 255, 255, 0.08);
+  --border-color-glow: rgba(0, 242, 254, 0.25);
+  
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  
+  /* Neon Accents (Harmonious Cyan, Magenta, Lime and Amber) */
+  --neon-cyan: #00f2fe;
+  --neon-purple: #bd00ff;
+  --neon-pink: #ff007a;
+  --neon-green: #00ff87;
+  --neon-amber: #ffd000;
+  
+  /* Glow shadows */
+  --shadow-cyan-glow: 0 0 15px rgba(0, 242, 254, 0.35);
+  --shadow-purple-glow: 0 0 15px rgba(189, 0, 255, 0.35);
+  --shadow-pink-glow: 0 0 15px rgba(255, 0, 122, 0.35);
+  --shadow-green-glow: 0 0 15px rgba(0, 255, 135, 0.35);
+  --shadow-amber-glow: 0 0 15px rgba(255, 208, 0, 0.35);
+  
+  /* Fonts */
+  --font-heading: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'Space Mono', monospace;
+
+  background-color: var(--bg-main);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  min-height: 100vh;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  transition: background-color 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+body {
+  overflow-x: hidden;
+  position: relative;
+  background-color: var(--bg-main);
+  background-image: 
+    radial-gradient(at 10% 20%, rgba(189, 0, 255, 0.05) 0px, transparent 50%),
+    radial-gradient(at 90% 80%, rgba(0, 242, 254, 0.05) 0px, transparent 50%);
+  background-attachment: fixed;
+}
+
+/* Scrollbar customization */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-main);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Glassmorphism utility card */
+.glass-panel {
+  background: var(--bg-surface);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+}
+
+.glass-panel-interactive:hover {
+  border-color: var(--border-color-glow);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5), var(--shadow-cyan-glow);
+  transform: translateY(-2px);
+}
+
+/* Headings */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+/* Neon buttons */
+.btn-neon {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 12px 24px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 14px;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Color variations for neon buttons */
+.btn-cyan {
+  background: rgba(0, 242, 254, 0.1);
+  color: var(--neon-cyan);
+  border-color: rgba(0, 242, 254, 0.3);
+}
+.btn-cyan:hover:not(:disabled) {
+  background: var(--neon-cyan);
+  color: #000;
+  box-shadow: var(--shadow-cyan-glow);
+  transform: scale(1.03);
+}
+
+.btn-purple {
+  background: rgba(189, 0, 255, 0.1);
+  color: var(--neon-purple);
+  border-color: rgba(189, 0, 255, 0.3);
+}
+.btn-purple:hover:not(:disabled) {
+  background: var(--neon-purple);
+  color: #fff;
+  box-shadow: var(--shadow-purple-glow);
+  transform: scale(1.03);
+}
+
+.btn-pink {
+  background: rgba(255, 0, 122, 0.1);
+  color: var(--neon-pink);
+  border-color: rgba(255, 0, 122, 0.3);
+}
+.btn-pink:hover:not(:disabled) {
+  background: var(--neon-pink);
+  color: #fff;
+  box-shadow: var(--shadow-pink-glow);
+  transform: scale(1.03);
+}
+
+.btn-green {
+  background: rgba(0, 255, 135, 0.1);
+  color: var(--neon-green);
+  border-color: rgba(0, 255, 135, 0.3);
+}
+.btn-green:hover:not(:disabled) {
+  background: var(--neon-green);
+  color: #000;
+  box-shadow: var(--shadow-green-glow);
+  transform: scale(1.03);
+}
+
+.btn-amber {
+  background: rgba(255, 208, 0, 0.1);
+  color: var(--neon-amber);
+  border-color: rgba(255, 208, 0, 0.3);
+}
+.btn-amber:hover:not(:disabled) {
+  background: var(--neon-amber);
+  color: #000;
+  box-shadow: var(--shadow-amber-glow);
+  transform: scale(1.03);
+}
+
+.btn-neon:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* Secondary ghost button */
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+.btn-secondary:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+}
+.btn-secondary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Inputs */
+.input-neon {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  outline: none;
+  width: 100%;
+}
+.input-neon:focus {
+  border-color: var(--neon-cyan);
+  box-shadow: 0 0 10px rgba(0, 242, 254, 0.2);
+}
+
+/* Animations */
+@keyframes pulse-cyan {
+  0%, 100% { box-shadow: 0 0 10px rgba(0, 242, 254, 0.2); }
+  50% { box-shadow: 0 0 25px rgba(0, 242, 254, 0.6); }
+}
+
+@keyframes pulse-pink {
+  0%, 100% { box-shadow: 0 0 10px rgba(255, 0, 122, 0.2); }
+  50% { box-shadow: 0 0 25px rgba(255, 0, 122, 0.6); }
+}
+
+@keyframes pulse-green {
+  0%, 100% { box-shadow: 0 0 10px rgba(0, 255, 135, 0.2); }
+  50% { box-shadow: 0 0 25px rgba(0, 255, 135, 0.6); }
+}
+
+.pulse-active-cyan {
+  animation: pulse-cyan 2s infinite;
+}
+.pulse-active-pink {
+  animation: pulse-pink 2s infinite;
+}
+.pulse-active-green {
+  animation: pulse-green 2s infinite;
+}
+
+/* General Layout utilities */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.grid-cols-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px;
+}
+@media (max-width: 768px) {
+  .grid-cols-2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.grid-cols-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+@media (max-width: 992px) {
+  .grid-cols-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Custom list items with glow active state */
+.list-item-glow {
+  position: relative;
+  overflow: hidden;
+}
+.list-item-glow::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background: transparent;
+  transition: all 0.2s;
+}
+.list-item-glow.active::before {
+  background: var(--neon-cyan);
+  box-shadow: 0 0 8px var(--neon-cyan);
+}
+.list-item-glow.dm-active::before {
+  background: var(--neon-pink);
+  box-shadow: 0 0 8px var(--neon-pink);
+}
