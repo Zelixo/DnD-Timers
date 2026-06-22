@@ -1012,7 +1012,7 @@ function App() {
 
       {/* Footer */}
       <footer style={{ marginTop: '32px', borderTop: '1px solid var(--border-color)', paddingTop: '16px', paddingBottom: '16px', display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-muted)' }}>
-        <span>Initiative Flow // Sleek Chess-Timer DnD Pacing Tracker</span>
+        <span>Initiative Flow</span>
         <span>Click "Save Log" to store data permanently</span>
       </footer>
 
