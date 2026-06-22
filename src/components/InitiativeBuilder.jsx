@@ -299,9 +299,8 @@ export default function InitiativeBuilder({ roster, combatQueue, onUpdateQueue, 
           onClick={onStartCombat}
           className="btn-neon btn-green"
           style={{ width: '100%', justifyContent: 'center', height: '48px', fontSize: '15px' }}
-          disabled={combatQueue.length === 0}
         >
-          ⚔️ Start Session Timer ⚔️
+          {combatQueue.length === 0 ? '⚔️ Start Empty Combat Pacing clock ⚔️' : '⚔️ Start Session Timer ⚔️'}
         </button>
       </div>
     </div>

@@ -48,7 +48,7 @@ export default function CombatPanel({
 
   // Start the timers
   useEffect(() => {
-    if (!isPaused) {
+    if (!isPaused && combatQueue.length > 0) {
       intervalRef.current = setInterval(() => {
         setTurnTime(prev => prev + 1);
         setTotalTime(prev => prev + 1);
@@ -58,7 +58,7 @@ export default function CombatPanel({
     }
 
     return () => clearInterval(intervalRef.current);
-  }, [isPaused]);
+  }, [isPaused, combatQueue.length]);
 
   const formatTime = (secs) => {
     const m = Math.floor(secs / 60).toString().padStart(2, '0');
@@ -200,17 +200,15 @@ export default function CombatPanel({
   };
 
   const handleRemoveQueueItem = (index) => {
-    if (combatQueue.length <= 1) {
-      alert("Cannot have empty combat queue.");
-      return;
-    }
     captureSnapshot();
     
     const newQueue = combatQueue.filter((_, idx) => idx !== index);
     
     let newActiveIndex = activeIndex;
-    if (activeIndex >= newQueue.length) {
-      // If we deleted the last person, active goes back to 0 (and increments round, but let's keep it simple and just set to 0)
+    if (newQueue.length === 0) {
+      newActiveIndex = 0;
+    } else if (activeIndex >= newQueue.length) {
+      // If we deleted the last person, active goes back to 0
       newActiveIndex = 0;
       setRound(prev => prev + 1);
     } else if (activeIndex > index) {
@@ -255,11 +253,17 @@ export default function CombatPanel({
     setShowAddMenu(false);
   };
 
-  const activeParticipant = combatQueue[activeIndex] || { name: 'None', type: 'dm', color: '--neon-pink' };
-  const onDeckParticipant = combatQueue[(activeIndex + 1) % combatQueue.length] || { name: 'None', type: 'dm', color: '--neon-pink' };
+  const activeParticipant = combatQueue.length > 0 ? combatQueue[activeIndex] : null;
+  const onDeckParticipant = combatQueue.length > 0 
+    ? (combatQueue[(activeIndex + 1) % combatQueue.length] || { name: 'None', type: 'dm', color: '--neon-pink' })
+    : null;
   
-  const activeColor = activeParticipant.type === 'dm' ? 'var(--neon-pink)' : `var(${activeParticipant.color})`;
-  const activeShadow = activeParticipant.type === 'dm' ? 'var(--shadow-pink-glow)' : `0 0 20px var(${activeParticipant.color})`;
+  const activeColor = activeParticipant 
+    ? (activeParticipant.type === 'dm' ? 'var(--neon-pink)' : `var(${activeParticipant.color})`)
+    : 'var(--border-color)';
+  const activeShadow = activeParticipant 
+    ? (activeParticipant.type === 'dm' ? 'var(--shadow-pink-glow)' : `0 0 20px var(${activeParticipant.color})`)
+    : 'none';
 
   return (
     <div className="grid-cols-3" style={{ gap: '24px', alignItems: 'stretch' }}>
@@ -316,54 +320,96 @@ export default function CombatPanel({
             }}
           />
 
-          <span style={{ 
-            color: activeColor, 
-            fontSize: '12px', 
-            fontWeight: 'bold', 
-            textTransform: 'uppercase', 
-            letterSpacing: '0.15em',
-            padding: '4px 12px',
-            background: 'rgba(255,255,255,0.03)',
-            borderRadius: '12px',
-            border: '1px solid var(--border-color)'
-          }}>
-            {activeParticipant.type === 'dm' ? '♛ DM TURN' : `🛡️ PLAYER TURN - ${activeParticipant.charClass.toUpperCase()}`}
-          </span>
+          {!activeParticipant ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'center' }}>
+              <span style={{ 
+                color: 'var(--text-muted)', 
+                fontSize: '12px', 
+                fontWeight: 'bold', 
+                textTransform: 'uppercase', 
+                letterSpacing: '0.15em',
+                padding: '4px 12px',
+                background: 'rgba(255,255,255,0.03)',
+                borderRadius: '12px',
+                border: '1px solid var(--border-color)'
+              }}>
+                📋 Queue is Empty
+              </span>
+              <h2 style={{ fontSize: '24px', color: '#fff', margin: '8px 0' }}>
+                Waiting for Combatants
+              </h2>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '13px', maxWidth: '420px', lineHeight: '1.5', marginBottom: '12px' }}>
+                Combat has started! Click below to add players or DM Time slots as their turns come up. You can drag and drop or reorder them at any time.
+              </p>
+              
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center', maxWidth: '500px' }}>
+                <button onClick={handleAddDmSlotToSession} className="btn-neon btn-pink" style={{ padding: '8px 16px', fontSize: '12px' }}>
+                  ⏱️ + DM Time
+                </button>
+                {roster.map(p => (
+                  <button 
+                    key={p.id} 
+                    onClick={() => handleAddPlayerToSession(p)} 
+                    className="btn-secondary"
+                    style={{ padding: '8px 16px', fontSize: '12px' }}
+                  >
+                    👤 + {p.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <>
+              <span style={{ 
+                color: activeColor, 
+                fontSize: '12px', 
+                fontWeight: 'bold', 
+                textTransform: 'uppercase', 
+                letterSpacing: '0.15em',
+                padding: '4px 12px',
+                background: 'rgba(255,255,255,0.03)',
+                borderRadius: '12px',
+                border: '1px solid var(--border-color)'
+              }}>
+                {activeParticipant.type === 'dm' ? '♛ DM TURN' : `🛡️ PLAYER TURN - ${activeParticipant.charClass.toUpperCase()}`}
+              </span>
 
-          <h1 style={{ fontSize: '56px', marginTop: '20px', marginBottom: '4px', wordBreak: 'break-word', color: '#fff' }}>
-            {activeParticipant.name}
-          </h1>
+              <h1 style={{ fontSize: '56px', marginTop: '20px', marginBottom: '4px', wordBreak: 'break-word', color: '#fff' }}>
+                {activeParticipant.name}
+              </h1>
 
-          <div style={{ 
-            fontFamily: 'var(--font-mono)', 
-            fontSize: '92px', 
-            fontWeight: '700', 
-            color: isPaused ? 'var(--text-muted)' : '#fff',
-            lineHeight: '1.2',
-            margin: '20px 0',
-            letterSpacing: '-0.03em'
-          }}>
-            {formatTime(turnTime)}
-          </div>
+              <div style={{ 
+                fontFamily: 'var(--font-mono)', 
+                fontSize: '92px', 
+                fontWeight: '700', 
+                color: isPaused ? 'var(--text-muted)' : '#fff',
+                lineHeight: '1.2',
+                margin: '20px 0',
+                letterSpacing: '-0.03em'
+              }}>
+                {formatTime(turnTime)}
+              </div>
 
-          <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', flexWrap: 'wrap' }}>
-            <button 
-              onClick={handlePauseToggle} 
-              className={`btn-neon ${isPaused ? 'btn-green' : 'btn-amber'}`}
-              style={{ minWidth: '140px' }}
-            >
-              {isPaused ? '▶ Resume' : '⏸ Pause'}
-            </button>
-            
-            <button 
-              onClick={handleEndTurn} 
-              className="btn-neon btn-cyan pulse-active-cyan"
-              style={{ minWidth: '220px', fontSize: '16px' }}
-              disabled={isPaused}
-            >
-              End Turn ➜
-            </button>
-          </div>
+              <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', flexWrap: 'wrap' }}>
+                <button 
+                  onClick={handlePauseToggle} 
+                  className={`btn-neon ${isPaused ? 'btn-green' : 'btn-amber'}`}
+                  style={{ minWidth: '140px' }}
+                >
+                  {isPaused ? '▶ Resume' : '⏸ Pause'}
+                </button>
+                
+                <button 
+                  onClick={handleEndTurn} 
+                  className="btn-neon btn-cyan pulse-active-cyan"
+                  style={{ minWidth: '220px', fontSize: '16px' }}
+                  disabled={isPaused}
+                >
+                  End Turn ➜
+                </button>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Bottom Control Bar (Undo / End Combat / On Deck) */}
@@ -379,8 +425,14 @@ export default function CombatPanel({
 
           <div className="glass-panel" style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
             <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 'bold', textTransform: 'uppercase' }}>ON DECK:</span>
-            <span style={{ fontSize: '13px', fontWeight: '600', color: onDeckParticipant.type === 'dm' ? 'var(--neon-pink)' : '#fff' }}>
-              {onDeckParticipant.name}
+            <span style={{ 
+              fontSize: '13px', 
+              fontWeight: '600', 
+              color: onDeckParticipant 
+                ? (onDeckParticipant.type === 'dm' ? 'var(--neon-pink)' : '#fff') 
+                : 'var(--text-muted)' 
+            }}>
+              {onDeckParticipant ? onDeckParticipant.name : 'None'}
             </span>
           </div>
 
