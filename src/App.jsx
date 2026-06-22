@@ -62,6 +62,11 @@ function App() {
   const [playerNameInput, setPlayerNameInput] = useState('');
   const [charClassInput, setCharClassInput] = useState('Fighter');
 
+  // Save Modal state details
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [saveSessionName, setSaveSessionName] = useState('');
+  const [saveSessionType, setSaveSessionType] = useState('Combat');
+
   const classes = [
     'Barbarian', 'Bard', 'Cleric', 'Druid', 'Fighter', 
     'Monk', 'Paladin', 'Ranger', 'Rogue', 'Sorcerer', 
@@ -321,13 +326,25 @@ function App() {
     }
   };
 
-  // Save current session to history log
+  // Save current session to history log (triggers prompting modal)
   const handleSaveSessionLog = () => {
     if (turnRecords.length === 0 && totalTime < 5) {
       alert("No significant time logged to save yet.");
       return;
     }
     
+    const dateStr = new Date().toLocaleDateString(undefined, { 
+      month: 'short', 
+      day: 'numeric', 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    });
+    setSaveSessionName(`Session - ${dateStr}`);
+    setSaveSessionType('Combat');
+    setShowSaveModal(true);
+  };
+
+  const handleConfirmSave = () => {
     const finalRecords = [...turnRecords];
     // Include current ongoing turn if time has passed
     if (turnTime > 0 && combatQueue.length > 0) {
@@ -345,6 +362,8 @@ function App() {
     const logEntry = {
       id: `combat-${Date.now()}`,
       timestamp: new Date().toISOString(),
+      sessionName: saveSessionName.trim() || `Session - ${new Date().toLocaleDateString()}`,
+      sessionType: saveSessionType,
       totalTime,
       rounds: round,
       turns: finalRecords,
@@ -352,7 +371,18 @@ function App() {
     };
 
     setCombatHistory(prev => [...prev, logEntry]);
-    alert("Combat session pacing statistics saved to Logs successfully!");
+    setShowSaveModal(false);
+
+    // Ask if they want to clear the timers
+    if (window.confirm("Pacing report saved! Do you want to reset the timers for a new session? (Queue will be kept)")) {
+      setTurnTime(0);
+      setTotalTime(0);
+      setRound(1);
+      setTurnRecords([]);
+      setHistoryStack([]);
+      setIsPaused(true);
+      setActiveIndex(0);
+    }
   };
 
   // Add character to standard master roster
@@ -985,6 +1015,72 @@ function App() {
         <span>Initiative Flow // Sleek Chess-Timer DnD Pacing Tracker</span>
         <span>Click "Save Log" to store data permanently</span>
       </footer>
+
+      {/* Save Session Modal overlay */}
+      {showSaveModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          background: 'rgba(0,0,0,0.6)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div className="glass-panel" style={{ padding: '24px', width: '400px', display: 'flex', flexDirection: 'column', gap: '16px', background: '#1c222e', border: '1px solid var(--neon-cyan)', boxShadow: 'var(--shadow-cyan-glow)' }}>
+            <h3 style={{ fontSize: '18px', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              💾 Save Session Pacing Report
+            </h3>
+            
+            <div>
+              <label style={{ display: 'block', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: 'bold', textTransform: 'uppercase' }}>Session Name / Notes</label>
+              <input 
+                type="text" 
+                className="input-neon"
+                placeholder="e.g. Session 14 - Goblin Ambush"
+                value={saveSessionName}
+                onChange={(e) => setSaveSessionName(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: 'bold', textTransform: 'uppercase' }}>Session Type</label>
+              <select 
+                className="input-neon"
+                value={saveSessionType}
+                onChange={(e) => setSaveSessionType(e.target.value)}
+                style={{ appearance: 'none', cursor: 'pointer' }}
+              >
+                <option value="Combat" style={{ background: '#131722', color: '#fff' }}>⚔️ Combat Session</option>
+                <option value="RP" style={{ background: '#131722', color: '#fff' }}>🎭 Roleplay (RP) Session</option>
+                <option value="Mixed" style={{ background: '#131722', color: '#fff' }}>🔮 Mixed (Both)</option>
+                <option value="Other" style={{ background: '#131722', color: '#fff' }}>⚙️ Other / General</option>
+              </select>
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+              <button 
+                onClick={() => setShowSaveModal(false)} 
+                className="btn-secondary"
+                style={{ flex: 1 }}
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleConfirmSave} 
+                className="btn-neon btn-cyan"
+                style={{ flex: 2 }}
+              >
+                Save Pacing Report
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
